@@ -1,26 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Roboto:wght@300;400;600&display=swap');
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* BGH OneUI Brand Colors */
+  --color-bgh-dark: #142608;
+  --color-bgh-green: #2F813E;
+  --color-bgh-soft: #8EBF9A;
+  --color-bgh-bg: #F2F2F2;
+  --color-bgh-red: #8C182D;
+
+  /* BGH OneUI Typography */
+  --font-sans: "Roboto", sans-serif;
+  --font-heading: "Montserrat", sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  body {
+    background-color: var(--color-bgh-bg);
+    font-family: var(--font-sans);
+    color: #1f2937;
+    -webkit-font-smoothing: antialiased;
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+  }
 }
