@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     // Check if consent already exists — prevent duplicates
     const existing = await prisma.consentRecord.findFirst({
       where: {
-        patientId: vitalPatient.id,
+        patientId: vitalPatient.userId,
         consentType: "registration",
       },
     });
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     // Create immutable consent record
     const consent = await prisma.consentRecord.create({
       data: {
-        patientId: vitalPatient.id,
+        patientId: vitalPatient.userId,
         consentType: "registration",
         accepted: true,
         consentedAt: new Date(),

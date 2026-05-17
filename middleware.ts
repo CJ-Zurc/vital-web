@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decodeToken, isTokenExpired } from "@/lib/jwt";
 
-// ─── Route access rules ───────────────────────────────────────────────────────
-
 const routeRoles: Record<string, string[]> = {
   "/api/patient": ["patient"],
   "/api/doctor": ["doctor"],
   "/api/admin": ["admin"],
 };
-
-// ─── Public routes — no token needed ─────────────────────────────────────────
 
 const publicRoutes = [
   "/api/auth/register",
@@ -22,22 +18,26 @@ const publicRoutes = [
   "/api/auth/consent",
 ];
 
-// ─── Middleware ───────────────────────────────────────────────────────────────
+function resolveVitalRole(decoded: ReturnType<typeof decodeToken>): string {
+  if (decoded.isAdmin) return "admin";
+
+  const roles = decoded.systemRoles?.["vital"];
+  if (Array.isArray(roles)) return roles[0] ?? "patient";
+
+  return "patient";
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Allow public routes through
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
     return NextResponse.next();
   }
 
-  // Only apply to /api routes
   if (!pathname.startsWith("/api")) {
     return NextResponse.next();
   }
 
-  // Extract token
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.replace("Bearer ", "").replace("bearer ", "");
 
@@ -48,7 +48,6 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  // Verify token is not expired
   if (isTokenExpired(token)) {
     return NextResponse.json(
       { success: false, message: "Token expired" },
@@ -56,7 +55,6 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  // Decode token
   let decoded;
   try {
     decoded = decodeToken(token);
@@ -67,22 +65,17 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  // Get VITAL role from systemRoles
-  const vitalRole = decoded.systemRoles?.["vital"] ?? "patient";
+  const vitalRole = resolveVitalRole(decoded);
 
-  // Check route role access
   for (const [route, allowedRoles] of Object.entries(routeRoles)) {
-    if (pathname.startsWith(route)) {
-      if (!allowedRoles.includes(vitalRole)) {
-        return NextResponse.json(
-          { success: false, message: "Forbidden" },
-          { status: 403 },
-        );
-      }
+    if (pathname.startsWith(route) && !allowedRoles.includes(vitalRole)) {
+      return NextResponse.json(
+        { success: false, message: "Forbidden" },
+        { status: 403 },
+      );
     }
   }
 
-  // Attach user info to request headers for route handlers to use
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-user-id", decoded.sub);
   requestHeaders.set("x-user-role", vitalRole);

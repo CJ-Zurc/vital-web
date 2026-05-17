@@ -202,3 +202,134 @@ export async function uhseSSOCallback(exchangeToken: string) {
     }),
   });
 }
+
+// ─── EHR Patient Integration ──────────────────────────────────────────────────
+
+export interface PatientRecordOut {
+  patient_id: string;
+  auth_id: string | null;
+  user_id: string | null;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  extension_name: string | null;
+  date_of_birth: string;
+  sex: string;
+  religion: string | null;
+  address_street: string;
+  address_barangay: string;
+  address_city_municipality: string;
+  address_province_region: string;
+  address_postal_code: string | null;
+  address_country: string;
+  contact_number: string | null;
+  email: string | null;
+  patient_type: string;
+  blood_type: string | null;
+  philhealth_identification_number: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EhrApiResponse<T> {
+  success: boolean;
+  message: string;
+  data?: T;
+}
+
+// Base fetcher for EHR
+async function ehrFetch<T>(
+  path: string,
+  options: RequestInit = {},
+  accessToken?: string,
+): Promise<EhrApiResponse<T>> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
+  }
+
+  const res = await fetch(`${env.EHR_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const json = await res.json();
+
+  if (!res.ok) {
+    throw new Error(json?.message ?? json?.detail ?? "EHR request failed");
+  }
+
+  return json;
+}
+
+// Get patient record by auth_id (for logged-in user)
+export async function ehrGetPatientByAuthId(accessToken: string) {
+  return ehrFetch<PatientRecordOut>("/patients/me", {
+    method: "GET",
+  }, accessToken);
+}
+
+// Create patient record
+export async function ehrCreatePatient(
+  data: {
+    first_name: string;
+    middle_name?: string;
+    last_name: string;
+    extension_name?: string;
+    date_of_birth: string; // YYYY-MM-DD
+    sex: string;
+    religion?: string;
+    address_street: string;
+    address_barangay: string;
+    address_city_municipality: string;
+    address_province_region: string;
+    address_postal_code?: string;
+    address_country?: string;
+    contact_number?: string;
+    email?: string;
+    patient_type: string;
+    blood_type?: string;
+    philhealth_identification_number?: string;
+  },
+  accessToken: string,
+) {
+  return ehrFetch<PatientRecordOut>("/patients", {
+    method: "POST",
+    body: JSON.stringify(data),
+  }, accessToken);
+}
+
+// Update patient record
+export async function ehrUpdatePatient(
+  patientId: string,
+  data: Partial<{
+    first_name: string;
+    middle_name: string;
+    last_name: string;
+    extension_name: string;
+    date_of_birth: string;
+    sex: string;
+    religion: string;
+    address_street: string;
+    address_barangay: string;
+    address_city_municipality: string;
+    address_province_region: string;
+    address_postal_code: string;
+    address_country: string;
+    contact_number: string;
+    email: string;
+    patient_type: string;
+    blood_type: string;
+    philhealth_identification_number: string;
+  }>,
+  accessToken: string,
+) {
+  return ehrFetch<PatientRecordOut>(`/patients/${patientId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  }, accessToken);
+}

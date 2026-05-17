@@ -120,15 +120,12 @@ model VitalUser {
 }
 
 model VitalPatient {
-  id                   String    @id @default(uuid())
-  userId               String    @unique
+  userId               String    @id
   user                 VitalUser @relation(fields: [userId], references: [id])
   authId               String    @unique
   profilePic           String?
   isRecordAvailable    Boolean   @default(false)
   isOnboardingComplete Boolean   @default(false)
-  lastName             String?
-  extensionName        String?
 
   appointments          Appointment[]
   externalHealthRecords ExternalHealthRecord[]
@@ -144,8 +141,7 @@ model VitalPatient {
 }
 
 model VitalDoctor {
-  id               String            @id @default(uuid())
-  userId           String            @unique
+  userId           String            @id
   user             VitalUser         @relation(fields: [userId], references: [id])
   authId           String            @unique
   role             String?
@@ -172,8 +168,7 @@ model VitalDoctor {
 }
 
 model VitalAdmin {
-  id     String    @id @default(uuid())
-  userId String    @unique
+  userId String    @id
   user   VitalUser @relation(fields: [userId], references: [id])
   authId String    @unique
 
@@ -187,7 +182,7 @@ model HospitalAffiliation {
   id           String      @id @default(uuid())
   haId         String?
   doctorId     String
-  doctor       VitalDoctor @relation(fields: [doctorId], references: [id])
+  doctor       VitalDoctor @relation(fields: [doctorId], references: [userId])
   hospitalName String
 
   @@map("hospital_affiliations")
@@ -196,7 +191,7 @@ model HospitalAffiliation {
 model DoctorQr {
   id              String          @id @default(uuid())
   doctorId        String
-  doctor          VitalDoctor     @relation(fields: [doctorId], references: [id])
+  doctor          VitalDoctor     @relation(fields: [doctorId], references: [userId])
   paymentProvider PaymentProvider
   filePath        String
   isActive        Boolean         @default(true)
@@ -208,7 +203,7 @@ model DoctorQr {
 model Schedule {
   id               String           @id @default(uuid())
   doctorId         String
-  doctor           VitalDoctor      @relation(fields: [doctorId], references: [id])
+  doctor           VitalDoctor      @relation(fields: [doctorId], references: [userId])
   slotDate         DateTime         @db.Date
   startTime        DateTime         @db.Time()
   endTime          DateTime         @db.Time()
@@ -225,7 +220,7 @@ model Schedule {
 model ExternalHealthRecord {
   id               String       @id @default(uuid())
   patientId        String
-  patient          VitalPatient @relation(fields: [patientId], references: [id])
+  patient          VitalPatient @relation(fields: [patientId], references: [userId])
   externalRecordId String?
   recordType       String?
   description      String?
@@ -239,7 +234,7 @@ model ExternalHealthRecord {
 model HealthRecord {
   id          String       @id @default(uuid())
   patientId   String
-  patient     VitalPatient @relation(fields: [patientId], references: [id])
+  patient     VitalPatient @relation(fields: [patientId], references: [userId])
   hrecordId   String?
   recordType  String?
   sourceLabel SourceLabel
@@ -254,9 +249,9 @@ model HealthRecord {
 model DoctorRecordAccess {
   id          String       @id @default(uuid())
   doctorId    String
-  doctor      VitalDoctor  @relation(fields: [doctorId], references: [id])
+  doctor      VitalDoctor  @relation(fields: [doctorId], references: [userId])
   patientId   String
-  patient     VitalPatient @relation(fields: [patientId], references: [id])
+  patient     VitalPatient @relation(fields: [patientId], references: [userId])
   grantType   GrantType
   isActive    Boolean      @default(true)
   grantedAt   DateTime     @default(now())
@@ -269,9 +264,9 @@ model DoctorRecordAccess {
 model Appointment {
   id                 String            @id @default(uuid())
   patientId          String
-  patient            VitalPatient      @relation(fields: [patientId], references: [id])
+  patient            VitalPatient      @relation(fields: [patientId], references: [userId])
   doctorId           String
-  doctor             VitalDoctor       @relation(fields: [doctorId], references: [id])
+  doctor             VitalDoctor       @relation(fields: [doctorId], references: [userId])
   scheduleSlotId     String?
   scheduleSlot       Schedule?         @relation(fields: [scheduleSlotId], references: [id])
   status             AppointmentStatus @default(pending)
@@ -343,7 +338,7 @@ model Note {
   consultId   String
   consult     Consultation @relation(fields: [consultId], references: [id])
   doctorId    String
-  doctor      VitalDoctor  @relation(fields: [doctorId], references: [id])
+  doctor      VitalDoctor  @relation(fields: [doctorId], references: [userId])
   note        String?
   lastSavedAt DateTime     @default(now()) @updatedAt
 
@@ -355,7 +350,7 @@ model Report {
   appointmentId    String      @unique
   appointment      Appointment @relation(fields: [appointmentId], references: [id])
   doctorId         String
-  doctor           VitalDoctor @relation(fields: [doctorId], references: [id])
+  doctor           VitalDoctor @relation(fields: [doctorId], references: [userId])
   clinicalFindings String?
   diagnosis        String?
   recommendations  String?
@@ -372,7 +367,7 @@ model Prescription {
   appointmentId             String
   appointment               Appointment @relation(fields: [appointmentId], references: [id])
   doctorId                  String
-  doctor                    VitalDoctor @relation(fields: [doctorId], references: [id])
+  doctor                    VitalDoctor @relation(fields: [doctorId], references: [userId])
   medicationName            String
   dosage                    String
   frequency                 String
@@ -390,7 +385,7 @@ model MedicalCertificate {
   appointmentId String
   appointment   Appointment @relation(fields: [appointmentId], references: [id])
   doctorId      String
-  doctor        VitalDoctor @relation(fields: [doctorId], references: [id])
+  doctor        VitalDoctor @relation(fields: [doctorId], references: [userId])
   filePath      String?
   endTime       DateTime?   @db.Time()
   accessCode    String      @unique
@@ -439,9 +434,9 @@ model Message {
   appointmentId String
   appointment   Appointment  @relation(fields: [appointmentId], references: [id])
   senderId      String
-  sender        VitalPatient @relation("SentMessages", fields: [senderId], references: [id])
+  sender        VitalPatient @relation("SentMessages", fields: [senderId], references: [userId])
   receiverId    String
-  receiver      VitalPatient @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  receiver      VitalPatient @relation("ReceivedMessages", fields: [receiverId], references: [userId])
   content       String?
   sentAt        DateTime     @default(now())
 
@@ -453,7 +448,7 @@ model Feedback {
   appointmentId String       @unique
   appointment   Appointment  @relation(fields: [appointmentId], references: [id])
   patientId     String
-  patient       VitalPatient @relation(fields: [patientId], references: [id])
+  patient       VitalPatient @relation(fields: [patientId], references: [userId])
   starRating    Int
   feedback      String?
   submittedAt   DateTime     @default(now())
@@ -464,7 +459,7 @@ model Feedback {
 model Notification {
   id            String              @id @default(uuid())
   patientId     String
-  patient       VitalPatient        @relation(fields: [patientId], references: [id])
+  patient       VitalPatient        @relation(fields: [patientId], references: [userId])
   appointmentId String?
   appointment   Appointment?        @relation(fields: [appointmentId], references: [id])
   type          NotificationType
@@ -481,7 +476,7 @@ model Notification {
 model ConsentRecord {
   id            String       @id @default(uuid())
   patientId     String
-  patient       VitalPatient @relation(fields: [patientId], references: [id])
+  patient       VitalPatient @relation(fields: [patientId], references: [userId])
   appointmentId String?
   appointment   Appointment? @relation(fields: [appointmentId], references: [id])
   consentType   ConsentType
@@ -494,7 +489,7 @@ model ConsentRecord {
 model AuditLog {
   id             String     @id @default(uuid())
   adminId        String
-  admin          VitalAdmin @relation(fields: [adminId], references: [id])
+  admin          VitalAdmin @relation(fields: [adminId], references: [userId])
   actionType     String?
   targetEntity   String?
   targetEntityId String?
@@ -507,7 +502,7 @@ model AuditLog {
 model SystemContent {
   id           String       @id @default(uuid())
   adminId      String
-  admin        VitalAdmin   @relation(fields: [adminId], references: [id])
+  admin        VitalAdmin   @relation(fields: [adminId], references: [userId])
   contentType  ContentType
   title        String
   body         String

@@ -119,7 +119,7 @@ export async function POST(req: NextRequest) {
     // ── Auto-create registration consent record ──
     await prisma.consentRecord.create({
       data: {
-        patientId: vitalUser.patient!.id,
+        patientId: vitalUser.patient!.userId,
         consentType: "registration",
         accepted: true,
         consentedAt: new Date(),

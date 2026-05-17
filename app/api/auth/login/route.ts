@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uhseLogin } from "@/lib/uhse";
+import { uhseLogin, ehrGetPatientByAuthId } from "@/lib/uhse";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
@@ -61,6 +61,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Check if patient has EHR record
+    let isRecordAvailable = false;
+    if (role === "patient" || role === "admin") {
+      try {
+        const ehrRecord = await ehrGetPatientByAuthId(access_token);
+        if (ehrRecord.success && ehrRecord.data) {
+          isRecordAvailable = true;
+          // Update the database
+          if (vitalUser.patient) {
+            await prisma.vitalPatient.update({
+              where: { userId: vitalUser.id },
+              data: { isRecordAvailable: true },
+            });
+          }
+        }
+      } catch (error) {
+        // EHR record not found or error occurred - this is OK
+        console.log("EHR record not found for user:", user.id);
+      }
+    }
+
   return NextResponse.json({
     success: true,
     message: "Login successful.",
@@ -71,6 +92,7 @@ export async function POST(req: NextRequest) {
       role: vitalUser.role,
       ...(vitalUser.role === "patient" && {
         isOnboardingComplete: vitalUser.patient?.isOnboardingComplete ?? false,
+        isRecordAvailable,
       }),
     },
   });

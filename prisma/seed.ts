@@ -26,8 +26,6 @@ async function main() {
           authId: "seed-patient-auth-id-001",
           isRecordAvailable: false,
           isOnboardingComplete: false,
-          lastName: "dela Cruz",
-          extensionName: null,
         },
       },
     },
