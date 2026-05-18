@@ -193,8 +193,16 @@ export async function POST(req: NextRequest) {
           );
         }
       } catch (err: any) {
+        console.error("EHR self-registration failed:", {
+          status: err.status,
+          message: err.message,
+        });
         return NextResponse.json(
-          { success: false, message: err.message ?? "Failed to create health record." },
+          {
+            success: false,
+            message: err.message ?? "Failed to create health record.",
+            upstreamStatus: err.status,
+          },
           { status: err.status ?? 502 },
         );
       }

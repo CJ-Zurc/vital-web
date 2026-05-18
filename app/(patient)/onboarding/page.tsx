@@ -463,7 +463,32 @@ export default function PatientOnboardingPage() {
     }
 
     try {
+      let authProfile: {
+        firstName?: string;
+        middleName?: string;
+        lastName?: string;
+        extensionName?: string;
+        email?: string;
+      } = {};
+
+      try {
+        const profileRes = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const profileData = await profileRes.json();
+        if (profileRes.ok && profileData.data) {
+          authProfile = profileData.data;
+        }
+      } catch {
+        // The server route has its own Auth profile fallback.
+      }
+
       const payload = {
+        first_name: authProfile.firstName || undefined,
+        middle_name: authProfile.middleName || undefined,
+        last_name: authProfile.lastName || undefined,
+        extension_name: authProfile.extensionName || undefined,
+        email: authProfile.email || undefined,
         // Identity: only include fields the onboarding form collects
         date_of_birth: step1.dateOfBirth,
         sex: step1.sex,
