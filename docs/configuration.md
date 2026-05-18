@@ -25,8 +25,11 @@ Changing any of these requires `docker compose ... up -d --build vital-web` (not
 
 | Key | Notes |
 |---|---|
+| `GATEWAY_URL` | Gateway base URL used by Next.js route handlers. In root compose this should be `http://bgh-gateway:8080`; standalone local development can use `http://localhost:8080`. Falls back to `NEXT_PUBLIC_API_GATEWAY_URL` when omitted. |
 | `VITAL_AUTH_CLIENT_ID` | Mirrors `SYSTEM_VITAL_CLIENT_ID` in `.env.uhse_auth`. Used only in server route handlers / actions. |
 | `VITAL_AUTH_CLIENT_SECRET` | Mirrors `SYSTEM_VITAL_CLIENT_SECRET` in `.env.uhse_auth`. Server-only. |
+
+`VITAL_CLIENT_ID` and `VITAL_CLIENT_SECRET` remain accepted as legacy aliases, but new env files should use the `VITAL_AUTH_CLIENT_*` names above.
 
 ## Prisma
 
