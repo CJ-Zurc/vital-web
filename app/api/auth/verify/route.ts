@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uhseVerifyEmail } from "@/lib/uhse";
+import { gatewayVerifyEmail } from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
-import { getVitalRole } from "@/lib/jwt";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { email, code } = body;
 
-    // 1. Verify with UHSE — returns full session on success
-    const uhseRes = await uhseVerifyEmail({ email, code });
+    // 1. Verify through the gateway — returns full session on success
+    const uhseRes = await gatewayVerifyEmail({ email, code });
 
     if (!uhseRes.success || !uhseRes.data) {
       return NextResponse.json(
@@ -41,7 +40,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Build response — pass UHSE token to client
+    // 3. Build response — pass the gateway-issued token to the client
     const response = NextResponse.json({
       success: true,
       message: "Account verified. Logged in.",

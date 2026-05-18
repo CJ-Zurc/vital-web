@@ -23,6 +23,7 @@ export function decodeToken(token: string): UHSETokenPayload {
 }
 
 export function isTokenExpired(token: string): boolean {
+
   try {
     const decoded = decodeToken(token);
     return decoded.exp * 1000 < Date.now();

@@ -1,25 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uhseLogout } from "@/lib/uhse";
+import { gatewayLogout } from "@/lib/gateway";
+import { extractBearerToken } from "@/lib/auth";
+
+// ─── POST /api/auth/logout ────────────────────────────────────────────────────
+// Invalidates the session on UHSE via Gateway.
+// The client should also clear its stored token on success.
 
 export async function POST(req: NextRequest) {
   try {
-    const accessToken = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
+    const accessToken = extractBearerToken(req.headers.get("authorization"));
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { success: false, message: "No active session." },
+        { status: 401 },
+      );
+    }
+
+    // Gateway logout also needs the refresh token cookie if present
     const refreshToken = req.cookies.get("refresh_token")?.value ?? "";
 
-    await uhseLogout(accessToken, refreshToken);
+    try {
+      await gatewayLogout(accessToken, refreshToken);
+    } catch (err: any) {
+      // If Gateway returns 401, the token is already expired/invalid.
+      // Treat as a successful logout from VITAL's perspective.
+      if (err.status === 401) {
+        return NextResponse.json({
+          success: true,
+          message: "Session already expired. Logged out.",
+        });
+      }
+      throw err;
+    }
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       message: "Logged out successfully.",
     });
-
-    // Clear refresh token cookie
-    response.cookies.delete("refresh_token");
-
-    return response;
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, message: error.message ?? "Logout failed" },
+      { success: false, message: error.message ?? "Logout failed." },
       { status: 500 },
     );
   }

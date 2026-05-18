@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uhseRegister } from "@/lib/uhse";
+import { gatewayRegister } from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
 
 // ─── Validators ───────────────────────────────────────────────────────────────
@@ -64,10 +64,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Call UHSE register ──
+    // ── Call gateway register ──
     let uhseRes;
     try {
-      uhseRes = await uhseRegister({
+      uhseRes = await gatewayRegister({
         email,
         password,
         first_name,

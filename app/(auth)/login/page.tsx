@@ -42,6 +42,7 @@ export default function LoginPage() {
         return
       }
 
+      
       // ── 2FA required ──
       if (!data.data?.access_token && data.data?.email) {
         sessionStorage.setItem("mfa_email", data.data.email)
@@ -64,7 +65,7 @@ export default function LoginPage() {
         return
       }
       if (!isOnboardingComplete) {
-        router.push("/onboarding")
+        router.push("/patient/onboarding")
         return
       }
       router.push("/patient/dashboard")

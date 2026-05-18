@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ehrGetPatientByAuthId, ehrCreatePatient } from "@/lib/uhse";
+import {
+  gatewayCreateEHRPatient,
+  gatewayGetEHRPatientMe,
+} from "@/lib/gateway";
+import { extractBearerToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { decodeToken } from "@/lib/jwt";
 
 export async function GET(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "").replace("bearer ", "");
+    const token = extractBearerToken(authHeader);
 
     if (!token) {
       return NextResponse.json(
@@ -15,8 +18,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Fetch from EHR by auth_id (GET /patients/me)
-    const ehrResponse = await ehrGetPatientByAuthId(token);
+    // Fetch from the gateway, which forwards the request to the EHR service.
+    const ehrResponse = await gatewayGetEHRPatientMe(token);
 
     if (!ehrResponse.success) {
       return NextResponse.json(
@@ -26,9 +29,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Update vital-web database if record exists
-    const decoded = decodeToken(token);
     const vitalUser = await prisma.vitalUser.findUnique({
-      where: { authId: decoded.sub },
+      where: { authId: ehrResponse.data?.auth_id ?? "" },
       include: { patient: true },
     });
 
@@ -69,7 +71,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization");
-    const token = authHeader?.replace("Bearer ", "").replace("bearer ", "");
+    const token = extractBearerToken(authHeader);
 
     if (!token) {
       return NextResponse.json(
@@ -102,8 +104,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create patient in EHR
-    const ehrResponse = await ehrCreatePatient(body, token);
+    // Create patient through the gateway, which forwards the request to EHR.
+    const ehrResponse = await gatewayCreateEHRPatient(body, token);
 
     if (!ehrResponse.success) {
       return NextResponse.json(
@@ -113,9 +115,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Update vital-web database
-    const decoded = decodeToken(token);
     const vitalUser = await prisma.vitalUser.findUnique({
-      where: { authId: decoded.sub },
+      where: { authId: ehrResponse.data?.auth_id ?? "" },
       include: { patient: true },
     });
 

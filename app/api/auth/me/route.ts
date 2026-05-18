@@ -1,33 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uhseGetMe } from "@/lib/uhse";
+import { gatewayGetMe, GatewayRequestError } from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
+import { extractBearerToken } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
-    const accessToken = req.headers.get("authorization")?.replace("Bearer ", "");
+    const accessToken = extractBearerToken(req.headers.get("authorization"));
 
     if (!accessToken) {
       return NextResponse.json(
-        { success: false, message: "Unauthorized" },
+        { success: false, message: "Authorization header must be `Bearer <token>`" },
         { status: 401 },
       );
     }
 
-    // 1. Get profile from UHSE
-    const uhseRes = await uhseGetMe(accessToken);
+    // 1. Get profile from Gateway
+    const gatewayRes = await gatewayGetMe(accessToken);
 
-    if (!uhseRes.success || !uhseRes.data) {
+    if (!gatewayRes.success || !gatewayRes.data) {
       return NextResponse.json(
         { success: false, message: "Unauthorized" },
         { status: 401 },
       );
     }
 
-    const uhseUser = uhseRes.data;
+    const gatewayUser = gatewayRes.data;
 
     // 2. Get VITAL-specific data
     const vitalUser = await prisma.vitalUser.findUnique({
-      where: { authId: uhseUser.id },
+      where: { authId: gatewayUser.id },
       include: { patient: true, doctor: true },
     });
 
@@ -44,21 +45,26 @@ export async function GET(req: NextRequest) {
       data: {
         vitalUserId: vitalUser.id,
         role: vitalUser.role,
-        // From UHSE
-        email: uhseUser.email,
-        firstName: uhseUser.first_name,
-        middleName: uhseUser.middle_name,
-        lastName: uhseUser.last_name,
-        extensionName: uhseUser.extension_name,
-        profilePictureUrl: uhseUser.profile_picture_url,
-        isVerified: uhseUser.is_verified,
-        // VITAL-specific
+        email: gatewayUser.email,
+        firstName: gatewayUser.first_name,
+        middleName: gatewayUser.middle_name,
+        lastName: gatewayUser.last_name,
+        extensionName: gatewayUser.extension_name,
+        profilePictureUrl: gatewayUser.profile_picture_url,
+        isVerified: gatewayUser.is_verified,
         isOnboardingComplete: vitalUser.patient?.isOnboardingComplete ?? false,
         isRecordAvailable: vitalUser.patient?.isRecordAvailable ?? false,
         profilePic: vitalUser.patient?.profilePic ?? null,
       },
     });
   } catch (error: any) {
+    if (error instanceof GatewayRequestError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status },
+      );
+    }
+
     return NextResponse.json(
       { success: false, message: error.message ?? "Failed to get profile" },
       { status: 500 },

@@ -1,6 +1,15 @@
 import { cookies } from "next/headers";
 import { decodeToken, getVitalRole, isTokenExpired } from "./jwt";
 
+export function extractBearerToken(authorizationHeader: string | null): string | null {
+  if (!authorizationHeader) {
+    return null;
+  }
+
+  const match = authorizationHeader.trim().match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
 export async function getSession() {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("access_token")?.value;
