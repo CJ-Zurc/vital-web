@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   gatewayCreateEHRPatient,
+  GatewayRequestError,
   gatewayGetEHRPatientMe,
 } from "@/lib/gateway";
 import { extractBearerToken } from "@/lib/auth";
@@ -47,10 +48,22 @@ export async function GET(req: NextRequest) {
       data: ehrResponse.data,
     });
   } catch (error: any) {
-    // Log for debugging
+    // Missing records and missing EHR patient role both mean onboarding
+    // should proceed as a new patient setup.
+    if (
+      error instanceof GatewayRequestError &&
+      (error.status === 404 ||
+        (error.status === 403 && error.message.includes("EHR patient role is required")))
+    ) {
+      return NextResponse.json(
+        { success: false, message: "Patient record not found" },
+        { status: 404 }
+      );
+    }
+
+    // Log unexpected failures for debugging
     console.error("GET patient records error:", error);
 
-    // Check if it's a 404 from EHR (patient not found)
     if (
       error.message.includes("404") ||
       error.message.includes("not found")
