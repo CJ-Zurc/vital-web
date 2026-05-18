@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gatewayVerifyEmail } from "@/lib/gateway";
+import { gatewayVerifyEmailWithHeaders } from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
@@ -8,7 +8,9 @@ export async function POST(req: NextRequest) {
     const { email, code } = body;
 
     // 1. Verify through the gateway — returns full session on success
-    const uhseRes = await gatewayVerifyEmail({ email, code });
+    const gatewayResponse = await gatewayVerifyEmailWithHeaders({ email, code });
+    const uhseRes = gatewayResponse.data;
+    const refreshCookie = gatewayResponse.headers.get("set-cookie");
 
     if (!uhseRes.success || !uhseRes.data) {
       return NextResponse.json(
@@ -51,6 +53,9 @@ export async function POST(req: NextRequest) {
         role: vitalUser.role,
       },
     });
+    if (refreshCookie) {
+      response.headers.append("Set-Cookie", refreshCookie);
+    }
 
     return response;
   } catch (error: any) {

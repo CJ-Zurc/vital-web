@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gatewayLogin, gatewayGetEHRPatientByAuthId, GatewayRequestError } from "@/lib/gateway";
+import { gatewayLoginWithHeaders, gatewayGetEHRPatientByAuthId, GatewayRequestError } from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
 
 // ─── UHSE / Gateway error codes ───────────────────────────────────────────────
@@ -37,8 +37,11 @@ export async function POST(req: NextRequest) {
     }
 
     let uhseRes;
+    let refreshCookie: string | null = null;
     try {
-      uhseRes = await gatewayLogin({ email, password });
+      const gatewayResponse = await gatewayLoginWithHeaders({ email, password });
+      uhseRes = gatewayResponse.data;
+      refreshCookie = gatewayResponse.headers.get("set-cookie");
     } catch (err: any) {
       if (err instanceof GatewayRequestError) {
         // ── Extract UHSE error_code from message if present ──
@@ -211,7 +214,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Login successful.",
       data: {
@@ -226,6 +229,10 @@ export async function POST(req: NextRequest) {
         }),
       },
     });
+    if (refreshCookie) {
+      response.headers.append("Set-Cookie", refreshCookie);
+    }
+    return response;
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message ?? "Login failed." },

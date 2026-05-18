@@ -103,6 +103,21 @@ async function gatewayFetch<T>(
   accessToken?: string,
   refreshToken?: string,
 ): Promise<T> {
+  const response = await gatewayFetchWithHeaders<T>(path, options, accessToken, refreshToken);
+  return response.data;
+}
+
+export interface GatewayFetchResponse<T> {
+  data: T;
+  headers: Headers;
+}
+
+async function gatewayFetchWithHeaders<T>(
+  path: string,
+  options: RequestInit = {},
+  accessToken?: string,
+  refreshToken?: string,
+): Promise<GatewayFetchResponse<T>> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -122,7 +137,10 @@ async function gatewayFetch<T>(
   });
 
   if (res.status === 404) {
-    return { success: false, message: "Not found" } as T;
+    return {
+      data: { success: false, message: "Not found" } as T,
+      headers: res.headers,
+    };
   }
 
   const json = await res.json();
@@ -134,7 +152,7 @@ async function gatewayFetch<T>(
     );
   }
 
-  return json as T;
+  return { data: json as T, headers: res.headers };
 }
 
 // â”€â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -163,7 +181,15 @@ export async function gatewayLogin(data: {
   email: string;
   password: string;
 }): Promise<GatewayApiResponse<GatewayLoginData>> {
-  return gatewayFetch<GatewayApiResponse<GatewayLoginData>>(
+  const response = await gatewayLoginWithHeaders(data);
+  return response.data;
+}
+
+export async function gatewayLoginWithHeaders(data: {
+  email: string;
+  password: string;
+}): Promise<GatewayFetchResponse<GatewayApiResponse<GatewayLoginData>>> {
+  return gatewayFetchWithHeaders<GatewayApiResponse<GatewayLoginData>>(
     "/auth/login",
     {
       method: "POST",
@@ -180,7 +206,15 @@ export async function gatewayVerifyEmail(data: {
   email: string;
   code: string;
 }): Promise<GatewayApiResponse<GatewayLoginData>> {
-  return gatewayFetch<GatewayApiResponse<GatewayLoginData>>(
+  const response = await gatewayVerifyEmailWithHeaders(data);
+  return response.data;
+}
+
+export async function gatewayVerifyEmailWithHeaders(data: {
+  email: string;
+  code: string;
+}): Promise<GatewayFetchResponse<GatewayApiResponse<GatewayLoginData>>> {
+  return gatewayFetchWithHeaders<GatewayApiResponse<GatewayLoginData>>(
     "/auth/verify/confirm",
     {
       method: "POST",
@@ -197,7 +231,15 @@ export async function gatewayVerify2FA(data: {
   email: string;
   code: string;
 }): Promise<GatewayApiResponse<GatewayLoginData>> {
-  return gatewayFetch<GatewayApiResponse<GatewayLoginData>>(
+  const response = await gatewayVerify2FAWithHeaders(data);
+  return response.data;
+}
+
+export async function gatewayVerify2FAWithHeaders(data: {
+  email: string;
+  code: string;
+}): Promise<GatewayFetchResponse<GatewayApiResponse<GatewayLoginData>>> {
+  return gatewayFetchWithHeaders<GatewayApiResponse<GatewayLoginData>>(
     "/auth/login/verify",
     {
       method: "POST",
@@ -242,7 +284,14 @@ export async function gatewayResetPassword(data: {
 export async function gatewayRefresh(
   refreshToken: string,
 ): Promise<GatewayApiResponse<GatewayRefreshData>> {
-  return gatewayFetch<GatewayApiResponse<GatewayRefreshData>>(
+  const response = await gatewayRefreshWithHeaders(refreshToken);
+  return response.data;
+}
+
+export async function gatewayRefreshWithHeaders(
+  refreshToken: string,
+): Promise<GatewayFetchResponse<GatewayApiResponse<GatewayRefreshData>>> {
+  return gatewayFetchWithHeaders<GatewayApiResponse<GatewayRefreshData>>(
     "/auth/refresh",
     { method: "POST" },
     undefined,

@@ -504,6 +504,28 @@ export default function PatientOnboardingPage() {
 
       // Clear onboarding flag and redirect to dashboard
       sessionStorage.setItem("onboarding_complete", "true");
+      sessionStorage.setItem("record_available", "true");
+
+      try {
+        const refreshRes = await fetch("/api/auth/refresh", { method: "POST" });
+        const refreshData = await refreshRes.json();
+
+        if (refreshRes.ok && refreshData.data?.access_token) {
+          sessionStorage.setItem("access_token", refreshData.data.access_token);
+          if (refreshData.data.vitalUserId) {
+            sessionStorage.setItem("vital_user_id", refreshData.data.vitalUserId);
+          }
+          if (refreshData.data.authId) {
+            sessionStorage.setItem("auth_id", refreshData.data.authId);
+          }
+          if (refreshData.data.role) {
+            sessionStorage.setItem("vital_role", refreshData.data.role);
+          }
+        }
+      } catch {
+        // The dashboard can still bootstrap a refreshed session on the next load.
+      }
+
       router.push("/patient/dashboard");
     } catch {
       setServerError("Something went wrong. Please try again.");

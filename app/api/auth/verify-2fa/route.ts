@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gatewayVerify2FA } from "@/lib/gateway";
+import { gatewayVerify2FAWithHeaders } from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
 
 // ─── POST /api/auth/verify-2fa ────────────────────────────────────────────────
@@ -21,8 +21,11 @@ export async function POST(req: NextRequest) {
 
     // ── Forward to UHSE via Gateway ──
     let uhseRes;
+    let refreshCookie: string | null = null;
     try {
-      uhseRes = await gatewayVerify2FA({ email, code });
+      const gatewayResponse = await gatewayVerify2FAWithHeaders({ email, code });
+      uhseRes = gatewayResponse.data;
+      refreshCookie = gatewayResponse.headers.get("set-cookie");
     } catch (err: any) {
       // Gateway returns 4xx on bad/expired code
       return NextResponse.json(
@@ -53,7 +56,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "2FA verified. Login successful.",
       data: {
@@ -68,6 +71,10 @@ export async function POST(req: NextRequest) {
         }),
       },
     });
+    if (refreshCookie) {
+      response.headers.append("Set-Cookie", refreshCookie);
+    }
+    return response;
   } catch (error: any) {
     return NextResponse.json(
       { success: false, message: error.message ?? "2FA verification failed." },
