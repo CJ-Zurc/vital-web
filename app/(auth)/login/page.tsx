@@ -38,6 +38,17 @@ export default function LoginPage() {
           router.push("/login/locked")
           return
         }
+
+        // ── Unverified account — redirect to verify page ──
+        if (
+          data.errorCode === "ACCOUNT_INACTIVE" ||
+          (res.status === 403 && /inactive|not yet verified|not verified|unverified/i.test(data.message || ""))
+        ) {
+          sessionStorage.setItem("verify_email", email)
+          router.push("/verify")
+          return
+        }
+
         setError(data.message ?? "Login failed. Please try again.")
         return
       }
@@ -51,9 +62,11 @@ export default function LoginPage() {
       }
 
       // ── Success — store token in memory ──
-      const { access_token, role: vitalRole, isOnboardingComplete } = data.data
+      const { access_token, role: vitalRole, isOnboardingComplete, vitalUserId, authId } = data.data
       sessionStorage.setItem("access_token", access_token)
       sessionStorage.setItem("vital_role", vitalRole)
+      if (vitalUserId) sessionStorage.setItem("vital_user_id", vitalUserId)
+      if (authId) sessionStorage.setItem("auth_id", authId)
 
       // ── Route based on role ──
       if (vitalRole === "admin") {
@@ -65,7 +78,7 @@ export default function LoginPage() {
         return
       }
       if (!isOnboardingComplete) {
-        router.push("/patient/onboarding")
+        router.push("/onboarding")
         return
       }
       router.push("/patient/dashboard")

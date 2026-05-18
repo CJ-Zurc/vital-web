@@ -10,14 +10,9 @@ import { Select } from "@/components/ui/Select";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Step1Fields {
-  firstName: string;
-  middleName: string;
-  lastName: string;
-  extensionName: string;
   dateOfBirth: string;
   sex: string;
   contactNumber: string;
-  email: string;
 }
 
 interface Step2Fields {
@@ -129,7 +124,7 @@ function ProfilePicUpload() {
         Profile Picture <span className="font-normal text-gray-400">(Optional)</span>
       </label>
       <div className="flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center flex-shrink-0">
+        <div className="w-16 h-16 rounded-full bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center shrink-0">
           <ImagePlus className="w-6 h-6 text-gray-400" />
         </div>
         <div>
@@ -177,57 +172,6 @@ function Step1Form({
 
       <ProfilePicUpload />
 
-      {/* Name fields */}
-      <div className="grid grid-cols-2 gap-4">
-        {locked ? (
-          <>
-            <LockedInput label="First Name" value={fields.firstName} />
-            <LockedInput label="Last Name" value={fields.lastName} />
-          </>
-        ) : (
-          <>
-            <Input
-              label="First Name"
-              placeholder="Juan"
-              value={fields.firstName}
-              error={errors.firstName}
-              onChange={(e) => onChange("firstName", e.target.value)}
-            />
-            <Input
-              label="Last Name"
-              placeholder="Dela Cruz"
-              value={fields.lastName}
-              error={errors.lastName}
-              onChange={(e) => onChange("lastName", e.target.value)}
-            />
-          </>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        {locked ? (
-          <>
-            <LockedInput label="Middle Name" value={fields.middleName} />
-            <LockedInput label="Extension Name" value={fields.extensionName} />
-          </>
-        ) : (
-          <>
-            <Input
-              label="Middle Name (Optional)"
-              placeholder="Santos"
-              value={fields.middleName}
-              onChange={(e) => onChange("middleName", e.target.value)}
-            />
-            <Input
-              label="Extension Name (Optional)"
-              placeholder="Jr., Sr., III"
-              value={fields.extensionName}
-              onChange={(e) => onChange("extensionName", e.target.value)}
-            />
-          </>
-        )}
-      </div>
-
       {/* DOB + Sex */}
       <div className="grid grid-cols-2 gap-4">
         {locked ? (
@@ -256,7 +200,7 @@ function Step1Form({
         )}
       </div>
 
-      {/* Contact + Email — always editable */}
+      {/* Contact — always editable */}
       <Input
         label="Contact Number"
         type="tel"
@@ -264,15 +208,6 @@ function Step1Form({
         value={fields.contactNumber}
         error={errors.contactNumber}
         onChange={(e) => onChange("contactNumber", e.target.value)}
-      />
-
-      <Input
-        label="Email Address"
-        type="email"
-        placeholder="juan.delacruz@email.com"
-        value={fields.email}
-        error={errors.email}
-        onChange={(e) => onChange("email", e.target.value)}
       />
     </div>
   );
@@ -392,14 +327,9 @@ export default function PatientOnboardingPage() {
   const [isRecordAvailable, setIsRecordAvailable] = useState(false);
 
   const [step1, setStep1] = useState<Step1Fields>({
-    firstName: "",
-    middleName: "",
-    lastName: "",
-    extensionName: "",
     dateOfBirth: "",
     sex: "",
     contactNumber: "",
-    email: "",
   });
 
   const [step2, setStep2] = useState<Step2Fields>({
@@ -430,7 +360,7 @@ export default function PatientOnboardingPage() {
 
       try {
         // Try to fetch existing EHR record
-        const res = await fetch("/api/patient/record", {
+        const res = await fetch("/api/patient/records", {
           headers: { Authorization: `Bearer ${token}` },
         });
 
@@ -439,16 +369,11 @@ export default function PatientOnboardingPage() {
           if (data.success && data.data) {
             const ehr = data.data;
             setIsRecordAvailable(true);
-            // Pre-fill step 1 from EHR
+            // Pre-fill step 1 from EHR (only editable fields remain on the form)
             setStep1({
-              firstName: ehr.first_name ?? "",
-              middleName: ehr.middle_name ?? "",
-              lastName: ehr.last_name ?? "",
-              extensionName: ehr.extension_name ?? "",
               dateOfBirth: ehr.date_of_birth ?? "",
               sex: ehr.sex ?? "",
               contactNumber: ehr.contact_number ?? "",
-              email: ehr.email ?? "",
             });
             // Pre-fill step 2 from EHR
             setStep2({
@@ -491,21 +416,18 @@ export default function PatientOnboardingPage() {
 
   const validateStep1 = (): boolean => {
     // BGH holders: identity fields are locked, only validate editable ones
+    // For BGH holders only contact number is required (editable)
     if (isRecordAvailable) {
       const newErrors: Step1Errors = {};
       if (!step1.contactNumber.trim()) newErrors.contactNumber = "Contact number is required.";
-      if (!step1.email.trim()) newErrors.email = "Email is required.";
       setErrors1(newErrors);
       return Object.keys(newErrors).length === 0;
     }
 
     const newErrors: Step1Errors = {};
-    if (!step1.firstName.trim()) newErrors.firstName = "First name is required.";
-    if (!step1.lastName.trim()) newErrors.lastName = "Last name is required.";
     if (!step1.dateOfBirth) newErrors.dateOfBirth = "Date of birth is required.";
     if (!step1.sex) newErrors.sex = "Sex is required.";
     if (!step1.contactNumber.trim()) newErrors.contactNumber = "Contact number is required.";
-    if (!step1.email.trim()) newErrors.email = "Email is required.";
     setErrors1(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -542,16 +464,11 @@ export default function PatientOnboardingPage() {
 
     try {
       const payload = {
-        // Identity (only sent for new patients — backend ignores for BGH holders)
-        first_name: step1.firstName,
-        middle_name: step1.middleName || undefined,
-        last_name: step1.lastName,
-        extension_name: step1.extensionName || undefined,
+        // Identity: only include fields the onboarding form collects
         date_of_birth: step1.dateOfBirth,
         sex: step1.sex,
         // Always sent (editable for all)
         contact_number: step1.contactNumber || undefined,
-        email: step1.email || undefined,
         address_street: step2.addressStreet || undefined,
         address_barangay: step2.addressBarangay || undefined,
         address_city_municipality: step2.addressCityMunicipality || undefined,
@@ -564,11 +481,16 @@ export default function PatientOnboardingPage() {
         religion: step2.religion || undefined,
       };
 
+      const vitalUserId = sessionStorage.getItem("vital_user_id");
+      const authId = sessionStorage.getItem("auth_id");
+
       const res = await fetch("/api/patient/profile/onboarding", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "x-vital-user-id": vitalUserId || "",
+          "x-auth-id": authId || "",
         },
         body: JSON.stringify(payload),
       });

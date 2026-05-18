@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  gatewayCreateEHRPatient,
+  gatewayCreatePatientSelf,
   gatewayGetEHRPatientByAuthId,
   gatewayUpdateEHRPatient,
+  gatewayGetMe,
 } from "@/lib/gateway";
 import { extractBearerToken } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -13,7 +14,7 @@ import { prisma } from "@/lib/prisma";
 //
 // A) New patient (isRecordAvailable = false):
 //    → Validate all required fields
-//    → gatewayCreateEHRPatient with full payload
+//    → gatewayCreatePatientSelf (POST /ehr/patients/me) with full payload
 //    → Mark isRecordAvailable + isOnboardingComplete in VITAL DB
 //
 // B) BGH account holder (isRecordAvailable = true):
@@ -45,8 +46,8 @@ type EditableEHRField = (typeof EDITABLE_EHR_FIELDS)[number];
 export async function POST(req: NextRequest) {
   try {
     const accessToken = extractBearerToken(req.headers.get("authorization"));
-    const vitalUserId = req.headers.get("x-vital-user-id");
-    const authId = req.headers.get("x-auth-id");
+    const vitalUserId = req.headers.get("x-vital-user-id") ?? req.headers.get("x-user-id");
+    const authId = req.headers.get("x-auth-id") ?? req.headers.get("x-vital-auth-id") ?? req.headers.get("x-user-id");
 
     if (!accessToken || !vitalUserId || !authId) {
       return NextResponse.json(
@@ -56,15 +57,25 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Load VitalPatient ──
-    const vitalPatient = await prisma.vitalPatient.findUnique({
-      where: { userId: vitalUserId },
+    let vitalPatient = await prisma.vitalPatient.findUnique({
+      where: { authId },
     });
 
     if (!vitalPatient) {
-      return NextResponse.json(
-        { success: false, message: "Patient record not found." },
-        { status: 404 },
-      );
+      vitalPatient = await prisma.vitalPatient.findUnique({
+        where: { userId: vitalUserId },
+      });
+    }
+
+    if (!vitalPatient) {
+      vitalPatient = await prisma.vitalPatient.create({
+        data: {
+          userId: vitalUserId,
+          authId,
+          isRecordAvailable: false,
+          isOnboardingComplete: false,
+        },
+      });
     }
 
     if (vitalPatient.isOnboardingComplete) {
@@ -80,7 +91,10 @@ export async function POST(req: NextRequest) {
     // PATH A — New patient: no EHR record yet
     // ─────────────────────────────────────────────────────────────────────────
     if (!vitalPatient.isRecordAvailable) {
-      const {
+      // For new patients, try to use identity fields from the request. If
+      // they're missing (we already collected them at registration), fetch
+      // the authenticated user's profile from the gateway and use those.
+      let {
         first_name,
         last_name,
         date_of_birth,
@@ -99,7 +113,24 @@ export async function POST(req: NextRequest) {
         blood_type,
         philhealth_identification_number,
         patient_type,
-      } = body;
+      } = body as Record<string, any>;
+
+      // If the client didn't include identity fields, try to fetch them
+      // from the auth gateway (registration step should have them).
+      if (!first_name || !last_name) {
+        try {
+          const meRes = await gatewayGetMe(accessToken);
+          if (meRes.success && meRes.data) {
+            first_name = first_name || meRes.data.first_name;
+            last_name = last_name || meRes.data.last_name;
+            email = email || meRes.data.email;
+            middle_name = middle_name || meRes.data.middle_name;
+            extension_name = extension_name || meRes.data.extension_name;
+          }
+        } catch {
+          // ignore — we'll validate below and return an error if still missing
+        }
+      }
 
       // Required fields for new patients
       if (!first_name || !last_name || !date_of_birth || !sex) {
@@ -112,7 +143,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (!["male", "female"].includes(sex.toLowerCase())) {
+      if (!["male", "female"].includes((sex || "").toLowerCase())) {
         return NextResponse.json(
           { success: false, message: "Sex must be 'male' or 'female'." },
           { status: 400 },
@@ -128,12 +159,12 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        const ehrRes = await gatewayCreateEHRPatient(
+        const ehrRes = await gatewayCreatePatientSelf(
           {
             first_name,
             last_name,
             date_of_birth,
-            sex: sex.toLowerCase(),
+            sex: (sex || "").toLowerCase(),
             middle_name,
             extension_name,
             contact_number,

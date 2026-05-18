@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
         access_token,
         expires_in: uhseRes.data.expires_in,
         vitalUserId: vitalUser.id,
+        authId: user.id,
         role: vitalUser.role,
         ...(vitalUser.role === "patient" && {
           isOnboardingComplete: vitalUser.patient?.isOnboardingComplete ?? false,

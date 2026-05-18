@@ -27,7 +27,7 @@ function resolveVitalRole(decoded: ReturnType<typeof decodeToken>): string {
   return "patient";
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
@@ -77,6 +77,9 @@ export async function middleware(req: NextRequest) {
   }
 
   const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-vital-user-id", decoded.sub);
+  requestHeaders.set("x-auth-id", decoded.sub);
+  requestHeaders.set("x-vital-role", vitalRole);
   requestHeaders.set("x-user-id", decoded.sub);
   requestHeaders.set("x-user-role", vitalRole);
   requestHeaders.set("x-user-email", decoded.email);

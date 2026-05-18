@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
       data: {
         access_token,
         vitalUserId: vitalUser.id,
+        authId: user.id,
         role: vitalUser.role,
       },
     });

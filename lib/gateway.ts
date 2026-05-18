@@ -1,6 +1,6 @@
 import { env } from "./env";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export interface GatewayUser {
   id: string;
@@ -95,7 +95,7 @@ export interface GatewaySSOExchangeData {
   target_client_id: string;
 }
 
-// ─── Base fetcher ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Base fetcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function gatewayFetch<T>(
   path: string,
@@ -137,7 +137,7 @@ async function gatewayFetch<T>(
   return json as T;
 }
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function gatewayRegister(data: {
   email: string;
@@ -302,7 +302,7 @@ export async function gatewaySSOCallback(
   );
 }
 
-// ─── EHR ──────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ EHR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function gatewayGetEHRPatientMe(
   accessToken: string,
@@ -350,6 +350,39 @@ export async function gatewayCreateEHRPatient(
 ): Promise<GatewayApiResponse<EHRPatient>> {
   return gatewayFetch<GatewayApiResponse<EHRPatient>>(
     "/ehr/patients",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    accessToken,
+  );
+}
+
+export async function gatewayCreatePatientSelf(
+  data: {
+    first_name: string;
+    middle_name?: string;
+    last_name: string;
+    extension_name?: string;
+    date_of_birth: string;
+    sex: string;
+    religion?: string;
+    address_street?: string;
+    address_barangay?: string;
+    address_city_municipality?: string;
+    address_province_region?: string;
+    address_postal_code?: string;
+    address_country?: string;
+    contact_number?: string;
+    email: string;
+    patient_type?: string;
+    blood_type?: string;
+    philhealth_identification_number?: string;
+  },
+  accessToken: string,
+): Promise<GatewayApiResponse<EHRPatient>> {
+  return gatewayFetch<GatewayApiResponse<EHRPatient>>(
+    "/ehr/patients/me",
     {
       method: "POST",
       body: JSON.stringify(data),
