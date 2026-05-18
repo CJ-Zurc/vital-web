@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
+import { setClientSession } from "@/lib/client-session"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -63,10 +64,14 @@ export default function LoginPage() {
 
       // ── Success — store token in memory ──
       const { access_token, role: vitalRole, isOnboardingComplete, vitalUserId, authId } = data.data
-      sessionStorage.setItem("access_token", access_token)
-      sessionStorage.setItem("vital_role", vitalRole)
-      if (vitalUserId) sessionStorage.setItem("vital_user_id", vitalUserId)
-      if (authId) sessionStorage.setItem("auth_id", authId)
+      setClientSession({
+        access_token,
+        role: vitalRole,
+        vitalUserId,
+        authId,
+        isOnboardingComplete,
+        isRecordAvailable: data.data.isRecordAvailable,
+      })
 
       // ── Route based on role ──
       if (vitalRole === "admin") {
@@ -171,7 +176,7 @@ export default function LoginPage() {
           </form>
 
           <p className="text-center text-gray-600 mt-8 font-sans text-sm">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/register" className="font-medium" style={{ color: "#142608" }}>
               Register as Patient
             </Link>

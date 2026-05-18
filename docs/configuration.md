@@ -15,7 +15,7 @@ These must also be set as Docker build args in `compose.yaml` because Next.js ba
 
 | Key | Default | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_API_GATEWAY_URL` | `http://localhost:8080` | Where every browser fetch goes. |
+| `NEXT_PUBLIC_API_GATEWAY_URL` | `http://localhost:8080` | Legacy browser-visible Gateway base URL. Current VITAL_WEB patient/auth flows use local `/api/*` BFF routes instead of browser-to-Gateway calls. |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3001` | Self URL, used by absolute callbacks. |
 | `NEXT_PUBLIC_SYSTEM_SLUG` | `vital` | Drives `X-System-Context` defaults and theming. |
 
@@ -25,7 +25,7 @@ Changing any of these requires `docker compose ... up -d --build vital-web` (not
 
 | Key | Notes |
 |---|---|
-| `GATEWAY_URL` | Gateway base URL used by Next.js route handlers. In root compose this should be `http://bgh-gateway:8080`; standalone local development can use `http://localhost:8080`. Falls back to `NEXT_PUBLIC_API_GATEWAY_URL` when omitted. |
+| `GATEWAY_URL` | Gateway base URL used by Next.js route handlers. In root compose this should be `http://bgh-gateway:8080`; standalone local development falls back to `http://localhost:8080` when omitted. |
 | `VITAL_AUTH_CLIENT_ID` | Mirrors `SYSTEM_VITAL_CLIENT_ID` in `.env.uhse_auth`. Used only in server route handlers / actions. |
 | `VITAL_AUTH_CLIENT_SECRET` | Mirrors `SYSTEM_VITAL_CLIENT_SECRET` in `.env.uhse_auth`. Server-only. |
 

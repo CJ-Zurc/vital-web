@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { attachBffSessionHeaders, requireBffSession } from "@/lib/auth";
+import { GatewayRequestError } from "@/lib/gateway";
 
 export async function GET(req: NextRequest) {
-  const role = req.headers.get("x-vital-role");
-  const userId = req.headers.get("x-vital-user-id");
-  const email = req.headers.get("x-user-email");
+  try {
+    const session = await requireBffSession(req);
 
-  return NextResponse.json({
-    success: true,
-    message: "Welcome to the Doctor Portal",
-    data: { role, userId, email },
-  });
+    return attachBffSessionHeaders(NextResponse.json({
+      success: true,
+      message: "Welcome to the Doctor Portal",
+      data: { role: session.role, userId: session.authId, email: session.email },
+    }), session);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized.";
+    const status = error instanceof GatewayRequestError ? error.status : 500;
+    return NextResponse.json({ success: false, message }, { status });
+  }
 }

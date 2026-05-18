@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gatewayLogout } from "@/lib/gateway";
-import { extractBearerToken } from "@/lib/auth";
+import { requireBffSession } from "@/lib/auth";
+import { errorMessage, errorStatus } from "@/lib/errors";
 
 // ─── POST /api/auth/logout ────────────────────────────────────────────────────
 // Invalidates the session on UHSE via Gateway.
@@ -8,24 +9,17 @@ import { extractBearerToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    const accessToken = extractBearerToken(req.headers.get("authorization"));
-
-    if (!accessToken) {
-      return NextResponse.json(
-        { success: false, message: "No active session." },
-        { status: 401 },
-      );
-    }
+    const session = await requireBffSession(req);
 
     // Gateway logout also needs the refresh token cookie if present
     const refreshToken = req.cookies.get("refresh_token")?.value ?? "";
 
     try {
-      await gatewayLogout(accessToken, refreshToken);
-    } catch (err: any) {
+      await gatewayLogout(session.accessToken, refreshToken);
+    } catch (err: unknown) {
       // If Gateway returns 401, the token is already expired/invalid.
       // Treat as a successful logout from VITAL's perspective.
-      if (err.status === 401) {
+      if (errorStatus(err) === 401) {
         return NextResponse.json({
           success: true,
           message: "Session already expired. Logged out.",
@@ -38,9 +32,9 @@ export async function POST(req: NextRequest) {
       success: true,
       message: "Logged out successfully.",
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error.message ?? "Logout failed." },
+      { success: false, message: errorMessage(error, "Logout failed.") },
       { status: 500 },
     );
   }

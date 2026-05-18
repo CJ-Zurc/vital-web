@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gatewayGetMe, GatewayRequestError } from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
-import { extractBearerToken } from "@/lib/auth";
+import { attachBffSessionHeaders, requireBffSession } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
 
 export async function GET(req: NextRequest) {
   try {
-    const accessToken = extractBearerToken(req.headers.get("authorization"));
-
-    if (!accessToken) {
-      return NextResponse.json(
-        { success: false, message: "Authorization header must be `Bearer <token>`" },
-        { status: 401 },
-      );
-    }
+    const session = await requireBffSession(req);
 
     // 1. Get profile from Gateway
-    const gatewayRes = await gatewayGetMe(accessToken);
+    const gatewayRes = await gatewayGetMe(session.accessToken);
 
     if (!gatewayRes.success || !gatewayRes.data) {
       return NextResponse.json(
@@ -39,7 +33,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    return attachBffSessionHeaders(NextResponse.json({
       success: true,
       message: "Profile retrieved.",
       data: {
@@ -56,8 +50,8 @@ export async function GET(req: NextRequest) {
         isRecordAvailable: vitalUser.patient?.isRecordAvailable ?? false,
         profilePic: vitalUser.patient?.profilePic ?? null,
       },
-    });
-  } catch (error: any) {
+    }), session);
+  } catch (error: unknown) {
     if (error instanceof GatewayRequestError) {
       return NextResponse.json(
         { success: false, message: error.message },
@@ -66,7 +60,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, message: error.message ?? "Failed to get profile" },
+      { success: false, message: errorMessage(error, "Failed to get profile") },
       { status: 500 },
     );
   }

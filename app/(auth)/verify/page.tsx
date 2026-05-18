@@ -1,21 +1,22 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/Button"
+import { setClientSession } from "@/lib/client-session"
 
 export default function VerifyPage() {
   const router = useRouter()
   const [code, setCode] = useState(["", "", "", "", "", ""])
   const [error, setError] = useState("")
-  const [email, setEmail] = useState("")
+  const [email] = useState(() => {
+    if (typeof window === "undefined") {
+      return ""
+    }
+    return sessionStorage.getItem("verify_email") || sessionStorage.getItem("mfa_email") || ""
+  })
   const [loading, setLoading] = useState(false)
   const inputs = useRef<(HTMLInputElement | null)[]>([])
-
-  useEffect(() => {
-    const stored = sessionStorage.getItem("verify_email") || sessionStorage.getItem("mfa_email")
-    if (stored) setEmail(stored)
-  }, [])
 
   function handleChange(index: number, value: string) {
     if (!/^\d*$/.test(value)) return
@@ -77,10 +78,14 @@ export default function VerifyPage() {
 
       // Success — store token and role like login
       const { access_token, role: vitalRole, isOnboardingComplete, vitalUserId, authId } = data.data
-      sessionStorage.setItem("access_token", access_token)
-      sessionStorage.setItem("vital_role", vitalRole)
-      if (vitalUserId) sessionStorage.setItem("vital_user_id", vitalUserId)
-      if (authId) sessionStorage.setItem("auth_id", authId)
+      setClientSession({
+        access_token,
+        role: vitalRole,
+        vitalUserId,
+        authId,
+        isOnboardingComplete,
+        isRecordAvailable: data.data.isRecordAvailable,
+      })
 
       if (vitalRole === "admin") {
         router.push("/dashboard")
@@ -95,7 +100,7 @@ export default function VerifyPage() {
         return
       }
       router.push("/patient/dashboard")
-    } catch (err) {
+    } catch {
       setError("Something went wrong. Please try again.")
     } finally {
       setLoading(false)
@@ -220,7 +225,7 @@ export default function VerifyPage() {
               onClick={handleResend}
               disabled={loading}
             >
-              Didn't receive a code? Resend
+              Didn&apos;t receive a code? Resend
             </button>
 
             <button

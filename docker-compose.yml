@@ -1,0 +1,54 @@
+# Standalone Docker compose for VITAL_WEB + its Postgres DB.
+# Use when running VITAL_WEB on its own, outside the root BGH workspace stack.
+# The Gateway is expected on the Windows host (host.docker.internal:8080).
+#
+# Usage:
+#   docker compose up -d --build
+#   docker compose logs -f
+#   docker compose down
+
+services:
+  vital-services-db:
+    container_name: vital-services-db-standalone
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: vital_services_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - vital_services_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vital_services_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  vital-web:
+    container_name: vital-web-standalone
+    env_file:
+      - ./.env.docker
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:8080
+        NEXT_PUBLIC_APP_URL: http://localhost:3001
+        NEXT_PUBLIC_SYSTEM_SLUG: vital
+    environment:
+      # Override .env.docker so the app talks to the DB over the compose network
+      # instead of host.docker.internal:5435.
+      DATABASE_URL: postgresql://postgres:password@vital-services-db:5432/vital_services_db
+    ports:
+      - "3001:3001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      vital-services-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  vital_services_postgres_data:

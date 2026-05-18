@@ -1,26 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  gatewayCreateEHRPatient,
+  gatewayCreatePatientSelf,
   GatewayRequestError,
   gatewayGetEHRPatientMe,
 } from "@/lib/gateway";
-import { extractBearerToken } from "@/lib/auth";
+import { attachBffSessionHeaders, requireBffSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export async function GET(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization");
-    const token = extractBearerToken(authHeader);
-
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
+    const session = await requireBffSession(req);
 
     // Fetch from the gateway, which forwards the request to the EHR service.
-    const ehrResponse = await gatewayGetEHRPatientMe(token);
+    const ehrResponse = await gatewayGetEHRPatientMe(session.accessToken);
 
     if (!ehrResponse.success) {
       return NextResponse.json(
@@ -42,22 +38,23 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    return NextResponse.json({
+    return attachBffSessionHeaders(NextResponse.json({
       success: true,
       message: "Patient record retrieved",
       data: ehrResponse.data,
-    });
-  } catch (error: any) {
+    }), session);
+  } catch (error: unknown) {
     // Missing records and missing EHR patient role both mean onboarding
     // should proceed as a new patient setup.
     if (
       error instanceof GatewayRequestError &&
       (error.status === 404 ||
+        error.status === 401 ||
         (error.status === 403 && error.message.includes("EHR patient role is required")))
     ) {
       return NextResponse.json(
-        { success: false, message: "Patient record not found" },
-        { status: 404 }
+        { success: false, message: error.status === 401 ? "Unauthorized" : "Patient record not found" },
+        { status: error.status === 401 ? 401 : 404 }
       );
     }
 
@@ -65,8 +62,8 @@ export async function GET(req: NextRequest) {
     console.error("GET patient records error:", error);
 
     if (
-      error.message.includes("404") ||
-      error.message.includes("not found")
+      errorMessage(error, "").includes("404") ||
+      errorMessage(error, "").includes("not found")
     ) {
       return NextResponse.json(
         { success: false, message: "Patient record not found" },
@@ -75,7 +72,7 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, message: error.message ?? "Failed to retrieve patient record" },
+      { success: false, message: errorMessage(error, "Failed to retrieve patient record") },
       { status: 500 }
     );
   }
@@ -83,17 +80,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization");
-    const token = extractBearerToken(authHeader);
+    const session = await requireBffSession(req);
 
-    if (!token) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
-    const body = await req.json();
+    const body = await req.json() as Record<string, unknown>;
 
     // Validate required fields
     const requiredFields = [
@@ -117,8 +106,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create patient through the gateway, which forwards the request to EHR.
-    const ehrResponse = await gatewayCreateEHRPatient(body, token);
+    // Create the caller's own patient profile through the Gateway-safe self route.
+    const ehrResponse = await gatewayCreatePatientSelf(
+      body as Parameters<typeof gatewayCreatePatientSelf>[0],
+      session.accessToken,
+    );
 
     if (!ehrResponse.success) {
       return NextResponse.json(
@@ -140,19 +132,25 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    return NextResponse.json(
+    return attachBffSessionHeaders(NextResponse.json(
       {
         success: true,
         message: "Patient record created successfully",
         data: ehrResponse.data,
       },
       { status: 201 }
-    );
-  } catch (error: any) {
+    ), session);
+  } catch (error: unknown) {
+    if (error instanceof GatewayRequestError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status },
+      );
+    }
     console.error("POST patient records error:", error);
 
     return NextResponse.json(
-      { success: false, message: error.message ?? "Failed to create patient record" },
+      { success: false, message: errorMessage(error, "Failed to create patient record") },
       { status: 500 }
     );
   }

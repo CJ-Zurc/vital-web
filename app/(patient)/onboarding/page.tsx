@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Lock, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { authFetch, getAccessToken, setClientSession } from "@/lib/client-session";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -352,7 +353,7 @@ export default function PatientOnboardingPage() {
 
   useEffect(() => {
     async function bootstrap() {
-      const token = sessionStorage.getItem("access_token");
+      const token = await getAccessToken();
       if (!token) {
         router.replace("/login");
         return;
@@ -360,9 +361,7 @@ export default function PatientOnboardingPage() {
 
       try {
         // Try to fetch existing EHR record
-        const res = await fetch("/api/patient/records", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await authFetch("/api/patient/records");
 
         if (res.ok) {
           const data = await res.json();
@@ -456,7 +455,7 @@ export default function PatientOnboardingPage() {
     setServerError("");
     setLoading(true);
 
-    const token = sessionStorage.getItem("access_token");
+    const token = await getAccessToken();
     if (!token) {
       router.replace("/login");
       return;
@@ -472,9 +471,7 @@ export default function PatientOnboardingPage() {
       } = {};
 
       try {
-        const profileRes = await fetch("/api/auth/me", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const profileRes = await authFetch("/api/auth/me");
         const profileData = await profileRes.json();
         if (profileRes.ok && profileData.data) {
           authProfile = profileData.data;
@@ -506,16 +503,10 @@ export default function PatientOnboardingPage() {
         religion: step2.religion || undefined,
       };
 
-      const vitalUserId = sessionStorage.getItem("vital_user_id");
-      const authId = sessionStorage.getItem("auth_id");
-
-      const res = await fetch("/api/patient/profile/onboarding", {
+      const res = await authFetch("/api/patient/profile/onboarding", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "x-vital-user-id": vitalUserId || "",
-          "x-auth-id": authId || "",
         },
         body: JSON.stringify(payload),
       });
@@ -527,25 +518,15 @@ export default function PatientOnboardingPage() {
         return;
       }
 
-      // Clear onboarding flag and redirect to dashboard
-      sessionStorage.setItem("onboarding_complete", "true");
-      sessionStorage.setItem("record_available", "true");
-
       try {
-        const refreshRes = await fetch("/api/auth/refresh", { method: "POST" });
+        const refreshRes = await fetch("/api/auth/refresh", {
+          method: "POST",
+          credentials: "include",
+        });
         const refreshData = await refreshRes.json();
 
         if (refreshRes.ok && refreshData.data?.access_token) {
-          sessionStorage.setItem("access_token", refreshData.data.access_token);
-          if (refreshData.data.vitalUserId) {
-            sessionStorage.setItem("vital_user_id", refreshData.data.vitalUserId);
-          }
-          if (refreshData.data.authId) {
-            sessionStorage.setItem("auth_id", refreshData.data.authId);
-          }
-          if (refreshData.data.role) {
-            sessionStorage.setItem("vital_role", refreshData.data.role);
-          }
+          setClientSession(refreshData.data);
         }
       } catch {
         // The dashboard can still bootstrap a refreshed session on the next load.

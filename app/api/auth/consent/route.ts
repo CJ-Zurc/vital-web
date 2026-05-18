@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { attachBffSessionHeaders, requireBffSession } from "@/lib/auth";
+import { errorMessage } from "@/lib/errors";
+import { GatewayRequestError } from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
@@ -71,9 +74,9 @@ export async function POST(req: NextRequest) {
       },
       { status: 201 },
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error.message ?? "Failed to record consent" },
+      { success: false, message: errorMessage(error, "Failed to record consent") },
       { status: 500 },
     );
   }
@@ -82,9 +85,9 @@ export async function POST(req: NextRequest) {
 // GET — Admin retrieves consent records for audit
 export async function GET(req: NextRequest) {
   try {
-    const vitalRole = req.headers.get("x-vital-role");
+    const session = await requireBffSession(req);
 
-    if (vitalRole !== "admin") {
+    if (session.role !== "admin") {
       return NextResponse.json(
         { success: false, message: "Forbidden" },
         { status: 403 },
@@ -102,14 +105,20 @@ export async function GET(req: NextRequest) {
       orderBy: { consentedAt: "desc" },
     });
 
-    return NextResponse.json({
+    return attachBffSessionHeaders(NextResponse.json({
       success: true,
       message: "Consent records retrieved.",
       data: consents,
-    });
-  } catch (error: any) {
+    }), session);
+  } catch (error: unknown) {
+    if (error instanceof GatewayRequestError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status },
+      );
+    }
     return NextResponse.json(
-      { success: false, message: error.message ?? "Failed to retrieve consent records" },
+      { success: false, message: errorMessage(error, "Failed to retrieve consent records") },
       { status: 500 },
     );
   }

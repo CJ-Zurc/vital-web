@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gatewayLoginWithHeaders, gatewayGetEHRPatientByAuthId, GatewayRequestError } from "@/lib/gateway";
+import { errorMessage } from "@/lib/errors";
+import {
+  gatewayLoginWithHeaders,
+  gatewayGetEHRPatientMe,
+  GatewayRequestError,
+  type GatewayApiResponse,
+  type GatewayLoginData,
+} from "@/lib/gateway";
 import { prisma } from "@/lib/prisma";
 
 // ─── UHSE / Gateway error codes ───────────────────────────────────────────────
@@ -36,13 +43,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let uhseRes;
+    let uhseRes: GatewayApiResponse<GatewayLoginData>;
     let refreshCookie: string | null = null;
     try {
       const gatewayResponse = await gatewayLoginWithHeaders({ email, password });
       uhseRes = gatewayResponse.data;
       refreshCookie = gatewayResponse.headers.get("set-cookie");
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof GatewayRequestError) {
         // ── Extract UHSE error_code from message if present ──
         const code = err.message;
@@ -135,7 +142,7 @@ export async function POST(req: NextRequest) {
     // TODO: remove whichever branch doesn't match the actual Gateway response.
     if (
       uhseRes.success === false &&
-      (uhseRes as any).requiresOtp === true
+      uhseRes.requiresOtp === true
     ) {
       return NextResponse.json(
         {
@@ -201,7 +208,7 @@ export async function POST(req: NextRequest) {
     let isRecordAvailable = vitalUser.patient?.isRecordAvailable ?? false;
     if (role === "patient" && !isRecordAvailable) {
       try {
-        const ehrRecord = await gatewayGetEHRPatientByAuthId(user.id, access_token);
+        const ehrRecord = await gatewayGetEHRPatientMe(access_token);
         if (ehrRecord.success && ehrRecord.data) {
           isRecordAvailable = true;
           await prisma.vitalPatient.update({
@@ -233,9 +240,9 @@ export async function POST(req: NextRequest) {
       response.headers.append("Set-Cookie", refreshCookie);
     }
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { success: false, message: error.message ?? "Login failed." },
+      { success: false, message: errorMessage(error, "Login failed.") },
       { status: 500 },
     );
   }

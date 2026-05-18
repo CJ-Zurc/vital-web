@@ -25,6 +25,7 @@ export interface GatewayApiResponse<T = null> {
   success: boolean;
   message: string;
   data?: T;
+  requiresOtp?: boolean;
 }
 
 export class GatewayRequestError extends Error {
@@ -61,6 +62,30 @@ export interface GatewayRefreshData {
   token_type: string;
   expires_in: number;
   user: GatewayUser;
+}
+
+export interface GatewaySessionClaims {
+  sub: string;
+  email?: string;
+  system?: string;
+  systems?: string[];
+  isAdmin?: boolean;
+  isSuperAdmin?: boolean;
+  adminSystems?: string[];
+  systemRoles?: Record<string, string[]>;
+  profilePictureUrl?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  extensionName?: string;
+  iat?: number;
+  exp?: number;
+}
+
+export interface GatewaySessionData {
+  access_token: string;
+  expires_in?: number;
+  claims: GatewaySessionClaims;
 }
 
 export interface EHRPatient {
@@ -299,6 +324,17 @@ export async function gatewayRefreshWithHeaders(
   );
 }
 
+export async function gatewayBootstrapSessionWithHeaders(
+  refreshToken: string,
+): Promise<GatewayFetchResponse<GatewayApiResponse<GatewaySessionData>>> {
+  return gatewayFetchWithHeaders<GatewayApiResponse<GatewaySessionData>>(
+    "/auth/session",
+    { method: "GET" },
+    undefined,
+    refreshToken,
+  );
+}
+
 export async function gatewayLogout(
   accessToken: string,
   refreshToken: string,
@@ -358,7 +394,7 @@ export async function gatewayGetEHRPatientMe(
 ): Promise<GatewayApiResponse<EHRPatient>> {
   return gatewayFetch<GatewayApiResponse<EHRPatient>>(
     "/ehr/patients/me",
-    { method: "GET" },
+    { method: "GET", headers: { "X-System-Context": "ehr" } },
     accessToken,
   );
 }
@@ -369,7 +405,7 @@ export async function gatewayGetEHRPatientByAuthId(
 ): Promise<GatewayApiResponse<EHRPatient>> {
   return gatewayFetch<GatewayApiResponse<EHRPatient>>(
     `/ehr/patients/by-auth-id/${authId}`,
-    { method: "GET" },
+    { method: "GET", headers: { "X-System-Context": "ehr" } },
     accessToken,
   );
 }
@@ -390,7 +426,7 @@ export async function gatewayCreateEHRPatient(
     address_postal_code?: string;
     address_country?: string;
     contact_number?: string;
-    email: string;
+    email?: string;
     patient_type?: string;
     blood_type?: string;
     philhealth_identification_number?: string;
@@ -401,6 +437,7 @@ export async function gatewayCreateEHRPatient(
     "/ehr/patients",
     {
       method: "POST",
+      headers: { "X-System-Context": "ehr" },
       body: JSON.stringify(data),
     },
     accessToken,
@@ -423,7 +460,7 @@ export async function gatewayCreatePatientSelf(
     address_postal_code?: string;
     address_country?: string;
     contact_number?: string;
-    email: string;
+    email?: string;
     patient_type?: string;
     blood_type?: string;
     philhealth_identification_number?: string;
@@ -434,6 +471,7 @@ export async function gatewayCreatePatientSelf(
     "/ehr/patients/me",
     {
       method: "POST",
+      headers: { "X-System-Context": "ehr" },
       body: JSON.stringify(data),
     },
     accessToken,
@@ -449,6 +487,7 @@ export async function gatewayClaimEHRPatient(
     `/ehr/patients/${patientId}/claim`,
     {
       method: "POST",
+      headers: { "X-System-Context": "ehr" },
       body: JSON.stringify({ secret_key: secretKey }),
     },
     accessToken,
@@ -461,7 +500,7 @@ export async function gatewaySearchEHRPatients(
 ): Promise<GatewayApiResponse<EHRPatient[]>> {
   return gatewayFetch<GatewayApiResponse<EHRPatient[]>>(
     `/ehr/patients?search=${encodeURIComponent(query)}&limit=10`,
-    { method: "GET" },
+    { method: "GET", headers: { "X-System-Context": "ehr" } },
     accessToken,
   );
 }
@@ -487,6 +526,7 @@ export async function gatewayUpdateEHRPatient(
     `/ehr/patients/${patientId}`,
     {
       method: "PATCH",
+      headers: { "X-System-Context": "ehr" },
       body: JSON.stringify(data),
     },
     accessToken,

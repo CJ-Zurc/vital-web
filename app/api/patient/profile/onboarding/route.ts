@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   gatewayCreatePatientSelf,
-  gatewayGetEHRPatientByAuthId,
+  GatewayRequestError,
+  gatewayGetEHRPatientMe,
   gatewayUpdateEHRPatient,
   gatewayGetMe,
 } from "@/lib/gateway";
-import { extractBearerToken } from "@/lib/auth";
+import { attachBffSessionHeaders, requireBffSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 // ─── POST /api/patient/profile/onboarding ─────────────────────────────────────
@@ -23,7 +24,7 @@ import { prisma } from "@/lib/prisma";
 //    → Mark isOnboardingComplete in VITAL DB
 //    → Clinical identity fields (name, DOB, sex) are NOT sent — EHR owns them
 //
-// RBAC middleware guarantees x-vital-user-id and x-auth-id headers are injected.
+// The BFF session helper resolves the caller from Authorization or Gateway session bootstrap.
 
 // Editable fields for BGH holders — clinical identity is excluded
 const EDITABLE_EHR_FIELDS = [
@@ -43,18 +44,30 @@ const EDITABLE_EHR_FIELDS = [
 
 type EditableEHRField = (typeof EDITABLE_EHR_FIELDS)[number];
 
+function text(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function errorStatus(error: unknown, fallback: number): number {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof error.status === "number"
+  ) {
+    return error.status;
+  }
+  return fallback;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const accessToken = extractBearerToken(req.headers.get("authorization"));
-    const vitalUserId = req.headers.get("x-vital-user-id") ?? req.headers.get("x-user-id");
-    const authId = req.headers.get("x-auth-id") ?? req.headers.get("x-vital-auth-id") ?? req.headers.get("x-user-id");
-
-    if (!accessToken || !vitalUserId || !authId) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized." },
-        { status: 401 },
-      );
-    }
+    const session = await requireBffSession(req);
+    const { accessToken, authId } = session;
 
     // ── Load VitalPatient ──
     let vitalPatient = await prisma.vitalPatient.findUnique({
@@ -62,15 +75,10 @@ export async function POST(req: NextRequest) {
     });
 
     if (!vitalPatient) {
-      vitalPatient = await prisma.vitalPatient.findUnique({
-        where: { userId: vitalUserId },
-      });
-    }
-
-    if (!vitalPatient) {
+      const vitalUser = await prisma.vitalUser.findUnique({ where: { authId } });
       vitalPatient = await prisma.vitalPatient.create({
         data: {
-          userId: vitalUserId,
+          userId: vitalUser?.id ?? authId,
           authId,
           isRecordAvailable: false,
           isOnboardingComplete: false,
@@ -85,7 +93,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
+    const body = await req.json() as Record<string, unknown>;
 
     // ─────────────────────────────────────────────────────────────────────────
     // PATH A — New patient: no EHR record yet
@@ -94,26 +102,24 @@ export async function POST(req: NextRequest) {
       // For new patients, try to use identity fields from the request. If
       // they're missing (we already collected them at registration), fetch
       // the authenticated user's profile from the gateway and use those.
-      let {
-        first_name,
-        last_name,
-        date_of_birth,
-        sex,
-        middle_name,
-        extension_name,
-        contact_number,
-        email,
-        religion,
-        address_street,
-        address_barangay,
-        address_city_municipality,
-        address_province_region,
-        address_postal_code,
-        address_country,
-        blood_type,
-        philhealth_identification_number,
-        patient_type,
-      } = body as Record<string, any>;
+      let first_name = text(body.first_name);
+      let last_name = text(body.last_name);
+      let middle_name = text(body.middle_name);
+      let extension_name = text(body.extension_name);
+      let email = text(body.email);
+      const date_of_birth = text(body.date_of_birth);
+      const sex = text(body.sex);
+      const contact_number = text(body.contact_number);
+      const religion = text(body.religion);
+      const address_street = text(body.address_street);
+      const address_barangay = text(body.address_barangay);
+      const address_city_municipality = text(body.address_city_municipality);
+      const address_province_region = text(body.address_province_region);
+      const address_postal_code = text(body.address_postal_code);
+      const address_country = text(body.address_country);
+      const blood_type = text(body.blood_type);
+      const philhealth_identification_number = text(body.philhealth_identification_number);
+      const patient_type = text(body.patient_type);
 
       // If the client didn't include identity fields, try to fetch them
       // from the auth gateway (registration step should have them).
@@ -192,31 +198,31 @@ export async function POST(req: NextRequest) {
             { status: 502 },
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("EHR self-registration failed:", {
-          status: err.status,
-          message: err.message,
+          status: errorStatus(err, 502),
+          message: errorMessage(err, "Failed to create health record."),
         });
         return NextResponse.json(
           {
             success: false,
-            message: err.message ?? "Failed to create health record.",
-            upstreamStatus: err.status,
+            message: errorMessage(err, "Failed to create health record."),
+            upstreamStatus: errorStatus(err, 502),
           },
-          { status: err.status ?? 502 },
+          { status: errorStatus(err, 502) },
         );
       }
 
       await prisma.vitalPatient.update({
-        where: { userId: vitalUserId },
+        where: { userId: vitalPatient.userId },
         data: { isOnboardingComplete: true, isRecordAvailable: true },
       });
 
-      return NextResponse.json({
+      return attachBffSessionHeaders(NextResponse.json({
         success: true,
         message: "Onboarding complete.",
         data: { isOnboardingComplete: true, isRecordAvailable: true },
-      });
+      }), session);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -226,7 +232,7 @@ export async function POST(req: NextRequest) {
     // Fetch existing EHR record to get the patient_id needed for PATCH
     let patientId: string;
     try {
-      const ehrRes = await gatewayGetEHRPatientByAuthId(authId, accessToken);
+      const ehrRes = await gatewayGetEHRPatientMe(accessToken);
       if (!ehrRes.success || !ehrRes.data) {
         return NextResponse.json(
           { success: false, message: "Could not retrieve your existing health record." },
@@ -234,18 +240,19 @@ export async function POST(req: NextRequest) {
         );
       }
       patientId = ehrRes.data.patient_id;
-    } catch (err: any) {
+    } catch (err: unknown) {
       return NextResponse.json(
-        { success: false, message: err.message ?? "Failed to retrieve health record." },
-        { status: err.status ?? 502 },
+        { success: false, message: errorMessage(err, "Failed to retrieve health record.") },
+        { status: errorStatus(err, 502) },
       );
     }
 
     // Only pick editable fields from the request body — never touch clinical identity
     const editablePayload = EDITABLE_EHR_FIELDS.reduce(
       (acc, field: EditableEHRField) => {
-        if (body[field] !== undefined && body[field] !== "") {
-          acc[field] = body[field];
+        const value = text(body[field]);
+        if (value !== undefined && value !== "") {
+          acc[field] = value;
         }
         return acc;
       },
@@ -269,28 +276,34 @@ export async function POST(req: NextRequest) {
             { status: 502 },
           );
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         return NextResponse.json(
-          { success: false, message: err.message ?? "Failed to update health record." },
-          { status: err.status ?? 502 },
+          { success: false, message: errorMessage(err, "Failed to update health record.") },
+          { status: errorStatus(err, 502) },
         );
       }
     }
 
     // Mark onboarding complete
     await prisma.vitalPatient.update({
-      where: { userId: vitalUserId },
+      where: { userId: vitalPatient.userId },
       data: { isOnboardingComplete: true },
     });
 
-    return NextResponse.json({
+    return attachBffSessionHeaders(NextResponse.json({
       success: true,
       message: "Onboarding complete.",
       data: { isOnboardingComplete: true, isRecordAvailable: true },
-    });
-  } catch (error: any) {
+    }), session);
+  } catch (error: unknown) {
+    if (error instanceof GatewayRequestError) {
+      return NextResponse.json(
+        { success: false, message: error.message },
+        { status: error.status },
+      );
+    }
     return NextResponse.json(
-      { success: false, message: error.message ?? "Onboarding failed." },
+      { success: false, message: errorMessage(error, "Onboarding failed.") },
       { status: 500 },
     );
   }
